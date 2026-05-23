@@ -181,22 +181,33 @@ Image* gaussian_filter(Image* src, int kernel_size, float sigma) {
 
 
 int main(int argc, char** argv) {
-    if (argc < 4 || strcmp(argv[2], "-g") != 0) {
-        printf("Usage: %s input.png -g <size> output.png\n", argv[0]);
+    if (argc != 3) {
+        printf("Usage: %s input.png output.png\n", argv[0]);
+        printf("or\n");
+        printf("Usage: %s input.png output.png\n", argv[0]);
         return 1;
     }
     
-    int k = atoi(argv[3]);
-    if (k % 2 == 0) k++;
-    
     Image* img = image_load(argv[1]);
     if (!img) return 1;
+
+    printf("Enter: g / m <size> (Гауссов фильтр/Медианный фильтр)\n");
+    char k[3];
+    int s = 0;
+    scanf("%s%d", k, &s);
+    if (s % 2 == 0) s++;
+
+    Image* res = NULL;
+    if (strcmp(k, "m") == 0){
+        res = median_filter(img, s);
+    }
+    else {
+        res = gaussian_filter(img, s, 0.0f); 
+    }
+
+    if (!res) { image_free(img); return 1; };
     
-    // Image* res = median_filter(img, k);
-    Image* res = gaussian_filter(img, k, 0.0f);
-    if (!res) { image_free(img); return 1; }
-    
-    image_save(res, argv[4]);
+    image_save(res, argv[2]);
     
     image_free(img);
     image_free(res);
