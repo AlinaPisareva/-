@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <ctype.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -19,7 +20,7 @@ typedef struct {
 
 // Загрузка изображения из файла
 Image* image_load(const char* filename) {
-    Image* img = (Image*)malloc(sizeof(Image));
+    Image* img = malloc(sizeof(Image));
     if (!img) return NULL;
     
     img->data = stbi_load(filename, &img->width, &img->height, &img->channels, 0);
@@ -29,14 +30,31 @@ Image* image_load(const char* filename) {
         free(img);
         return NULL;
     }
-    
     return img;
+}
+
+//  Расширение файла
+int ends_with(const char* str, const char* suffix) {
+    if (!str || !suffix) return 0;
+    size_t ls = strlen(str);
+    size_t lsu = strlen(suffix);
+    return lsu <= ls && strcasecmp(str + ls - lsu, suffix) == 0;
 }
 
 // Сохранение
 int image_save(Image* img, const char* filename) {
-    return stbi_write_png(filename, img->width, img->height, 
-                          img->channels, img->data, img->width * img->channels);
+    if (ends_with(filename, ".png")) {
+        return stbi_write_png(filename, img->width, img->height, img->channels, img->data, img->width * img->channels);
+    }
+    else if (ends_with(filename, ".jpg") || ends_with(filename, ".jpeg")) {
+        return stbi_write_jpg(filename, img->width, img->height, img->channels, img->data, 90);
+    }
+    else if (ends_with(filename, ".bmp")) {
+        return stbi_write_bmp(filename, img->width, img->height, img->channels, img->data);
+    }
+    
+    fprintf(stderr, "Неподдерживаемый формат: %s\n", filename);
+    return 0;
 }
 
 // Очистка памяти
@@ -182,9 +200,9 @@ Image* gaussian_filter(Image* src, int kernel_size, float sigma) {
 
 int main(int argc, char** argv) {
     if (argc != 3) {
-        printf("Usage: %s input.png output.png\n", argv[0]);
+        printf("Enter: %s input.<png/jpg/bmp> output.<png/jpg/bmp>\n", argv[0]);
         printf("or\n");
-        printf("Usage: %s input.png output.png\n", argv[0]);
+        printf("Enter: %s input.<png/jpg/bmp> output.<png/jpg/bmp>\n", argv[0]);
         return 1;
     }
     
