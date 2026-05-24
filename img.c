@@ -70,7 +70,71 @@ static int compare_unsigned_char(const void* a, const void* b) {
     return (*(unsigned char*)a - *(unsigned char*)b);
 }
 
+// Детекция границ
+// Преобразование в серый
+Image* to_grayscale(Image* src) {
+    Image* gray = malloc(sizeof(Image));
+    gray->width = src->width;
+    gray->height = src->height;
+    gray->channels = 1;
+    gray->data = malloc(src->width * src->height);
+    
+    if (src->channels == 1) {
+        memcpy(gray->data, src->data, src->width * src->height);
+        return gray;
+    }
+    
+    for (int i = 0; i < src->width * src->height; i++) {
+        unsigned char r = src->data[i * 3];
+        unsigned char g = src->data[i * 3 + 1];
+        unsigned char b = src->data[i * 3 + 2];
+        gray->data[i] = (unsigned char)(0.299 * r + 0.587 * g + 0.114 * b);
+    }
+    return gray;
+}
 
+// Детекция границ
+Image* edge_detection(Image* src, int threshold) {
+    Image* gray = to_grayscale(src);
+    if (!gray) return NULL;
+    
+    Image* edges = malloc(sizeof(Image));
+    edges->width = gray->width;
+    edges->height = gray->height;
+    edges->channels = 1;
+    edges->data = calloc(gray->width * gray->height, 1);
+    
+    if (!edges->data) {
+        free(edges);
+        image_free(gray);
+        return NULL;
+    }
+    
+    // Ядра Собеля
+    int sobel_x[3][3] = {{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}};
+    int sobel_y[3][3] = {{-1, -2, -1}, { 0, 0, 0}, { 1, 2, 1}};
+
+    for (int y = 1; y < gray->height - 1; y++) {
+        for (int x = 1; x < gray->width - 1; x++) {
+            float gx = 0, gy = 0;
+            
+            for (int ky = -1; ky <= 1; ky++) {
+                for (int kx = -1; kx <= 1; kx++) {
+                    int px = x + kx;
+                    int py = y + ky;
+                    float pixel = gray->data[py * gray->width + px];
+                    
+                    gx += pixel * sobel_x[ky + 1][kx + 1];
+                    gy += pixel * sobel_y[ky + 1][kx + 1];
+                }
+            }
+            float magnitude = sqrtf(gx * gx + gy * gy);
+            edges->data[y * edges->width + x] = (magnitude > threshold) ? 255 : 0;
+        }
+    }
+    image_free(gray);
+    return edges;
+}
 
 // Медианный фильтр
 Image* median_filter(Image* src, int kernel_size) {
@@ -209,8 +273,9 @@ int main(int argc, char** argv) {
     Image* img = image_load(argv[1]);
     if (!img) return 1;
 
-    printf("Enter: g / m <size> (Гауссов фильтр/Медианный фильтр)\n");
-    char k[3];
+    printf("Enter: g / m / dt <size> (Гауссов фильтр/Медианный фильтр)\n");
+    
+    char k[10];
     int s = 0;
     scanf("%s%d", k, &s);
     if (s % 2 == 0) s++;
@@ -219,8 +284,11 @@ int main(int argc, char** argv) {
     if (strcmp(k, "m") == 0){
         res = median_filter(img, s);
     }
-    else {
+    else if (strcmp(k, "g") == 0) {
         res = gaussian_filter(img, s, 0.0f); 
+    }
+    else{
+        res = edge_detection(img, s);
     }
 
     if (!res) { image_free(img); return 1; };
