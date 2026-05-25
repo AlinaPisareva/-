@@ -70,8 +70,6 @@ static int compare_unsigned_char(const void* a, const void* b) {
     return (*(unsigned char*)a - *(unsigned char*)b);
 }
 
-// Детекция границ
-// Преобразование в серый
 Image* to_grayscale(Image* src) {
     Image* gray = malloc(sizeof(Image));
     gray->width = src->width;
@@ -91,6 +89,52 @@ Image* to_grayscale(Image* src) {
         gray->data[i] = (unsigned char)(0.299 * r + 0.587 * g + 0.114 * b);
     }
     return gray;
+}
+
+// Детекция границ
+// Цветные границы
+Image* edge_detection_overlay(Image* src, int thr, int r, int g, int b) {
+    Image* res = malloc(sizeof(Image));
+    *res = *src;
+    res->data = malloc(src->width * src->height * src->channels);
+    memcpy(res->data, src->data, src->width * src->height * src->channels);
+    
+    Image* gray = to_grayscale(src);
+    if (!gray) {
+        free(res->data);
+        free(res);
+        return NULL;
+    }
+
+    // Ядра Собеля
+    int sobel_x[3][3] = {{-1, 0, 1},{-2, 0, 2},{-1, 0, 1}};
+    int sobel_y[3][3] = {{-1, -2, -1},{0, 0, 0},{1, 2, 1}};
+    
+    for (int y = 1; y < src->height-1; y++)
+        for (int x = 1; x < src->width-1; x++) {
+            float gx = 0, gy = 0;
+
+            for (int ky = -1; ky <= 1; ky++)
+                for (int kx = -1; kx <= 1; kx++) {
+                    int px = x + kx;
+                    int py = y + ky;
+                    float pixel = gray->data[py*gray->width + px];
+                    gx += pixel * sobel_x[ky + 1][kx +1 ];
+                    gy += pixel * sobel_y[ky + 1][kx + 1];
+                }
+            if (sqrtf(gx*gx + gy*gy) > thr) {
+                if (src->channels == 1)// Черно белое
+                    res->data[y*res->width + x] = 0.299*r + 0.587*g + 0.114*b;
+                else { // Цветное
+                    int idx = (y*res->width + x) * 3;
+                    res->data[idx] = r;
+                    res->data[idx+1] = g;
+                    res->data[idx+2] = b;
+                }
+            }
+        }
+    image_free(gray);
+    return res;
 }
 
 // Детекция границ
@@ -122,14 +166,14 @@ Image* edge_detection(Image* src, int threshold) {
                 for (int kx = -1; kx <= 1; kx++) {
                     int px = x + kx;
                     int py = y + ky;
-                    float pixel = gray->data[py * gray->width + px];
+                    float pixel = gray->data[py*gray->width + px];
                     
                     gx += pixel * sobel_x[ky + 1][kx + 1];
                     gy += pixel * sobel_y[ky + 1][kx + 1];
                 }
             }
-            float magnitude = sqrtf(gx * gx + gy * gy);
-            edges->data[y * edges->width + x] = (magnitude > threshold) ? 255 : 0;
+            float magnitude = sqrtf(gx*gx + gy*gy);
+            edges->data[y*edges->width + x] = (magnitude > threshold) ? 255 : 0;
         }
     }
     image_free(gray);
@@ -265,20 +309,17 @@ Image* gaussian_filter(Image* src, int kernel_size, float sigma) {
 int main(int argc, char** argv) {
     if (argc != 3) {
         printf("Enter: %s input.<png/jpg/bmp> output.<png/jpg/bmp>\n", argv[0]);
-        printf("or\n");
-        printf("Enter: %s input.<png/jpg/bmp> output.<png/jpg/bmp>\n", argv[0]);
         return 1;
     }
     
     Image* img = image_load(argv[1]);
     if (!img) return 1;
 
-    printf("Enter: g / m / dt <size> (Гауссов фильтр/Медианный фильтр)\n");
+    printf("Enter: g / m / dt <size> (Гауссов фильтр/Медианный фильтр/Детекция границ)\n");
     
     char k[10];
     int s = 0;
     scanf("%s%d", k, &s);
-    if (s % 2 == 0) s++;
 
     Image* res = NULL;
     if (strcmp(k, "m") == 0){
@@ -288,7 +329,15 @@ int main(int argc, char** argv) {
         res = gaussian_filter(img, s, 0.0f); 
     }
     else{
-        res = edge_detection(img, s);
+        printf("Enter: rgb / bw (Цветное/Черно-белое)\n");
+        char color[5];
+        scanf("%s", color);
+        if (strcmp(color, "rgb") == 0){
+           res = edge_detection_overlay(img, s, 255, 0, 255); 
+        }
+        else if (strcmp(color, "bw") == 0){
+            res = edge_detection(img, s);
+        }
     }
 
     if (!res) { image_free(img); return 1; };
