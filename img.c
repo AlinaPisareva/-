@@ -3,6 +3,8 @@
 #include <string.h>
 #include <math.h>
 #include <ctype.h>
+#include <dirent.h>  // Работа с папками
+#include <sys/stat.h> // Существование папки
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -311,50 +313,114 @@ Image* sharpen_filter(Image* src, float strength) {
     return convolution(src, kernel, 3);
 }
 
+// Проверка на папку
+int is_directory(const char* path) {
+    struct stat st;
+    if (stat(path, &st) != 0) return 0;
+    return S_ISDIR(st.st_mode);
+}
+
+// Получение списка изображений в папке
+void get_image_files(const char* dir_path, char files[][256], int* count) {
+    DIR* dir = opendir(dir_path);
+    if (!dir) {
+        printf("Ошибка: не удалось открыть папку %s\n", dir_path);
+        return;
+    }
+    
+    struct dirent* entry;
+    *count = 0;
+    while ((entry = readdir(dir)) != NULL && *count < 100) {
+        const char* name = entry->d_name;
+        if (ends_with(name, ".png") || ends_with(name, ".jpg") || ends_with(name, ".bmp")) {
+            sprintf(files[(*count)++], "%s/%s", dir_path, name);
+        }
+    }
+    closedir(dir);
+}
+
+// Имя выходного файла
+void make_output_name(const char* input_path, const char* output_dir, const char* suffix, char* output_path) {
+    const char* filename = strrchr(input_path, '/');
+    filename = filename ? filename + 1 : input_path;
+    int len = strcspn(filename, ".");
+    sprintf(output_path, "%s/%.*s_%s.png", output_dir, len, filename, suffix);
+}
+// Выходная папка
+void create_output_dir(const char* output_dir) {
+    struct stat st;
+    if (stat(output_dir, &st)){
+        mkdir(output_dir, 0777);
+    }
+}
+
 int main(int argc, char** argv) {
-    if (argc != 3) {
-        printf("Enter: %s input.<png/jpg/bmp> output.<png/jpg/bmp>\n", argv[0]);
+    if (argc != 4) {
+        printf("Enter: %s file input.<png/jpg/bmp> output.<png/jpg/bmp> or %s folder input_dir output_dir\n", argv[0], argv[0]);
         return 1;
     }
     
-    Image* img = image_load(argv[1]);
-    if (!img) return 1;
-
-    printf("Enter: g / m / dt / r <size> (Гауссов фильтр/Медианный фильтр/Детекция границ/Повышение резкости)\n");
+    int is_file = (strcmp(argv[1], "file") == 0);
+    int is_folder = (strcmp(argv[1], "folder") == 0);
     
+    if (!is_file && !is_folder) {
+        printf("Первый аргумент: file или folder\n");
+        return 1;
+    }
+    
+    printf("Enter: g / m / dt / r <size> (Гауссов/Медианный/Детекция/Резкость)\n");
     char k[10];
     int s = 0;
     scanf("%s%d", k, &s);
-
-    Image* res = NULL;
-    if (strcmp(k, "m") == 0){
-        res = median_filter(img, s);
-    }
-    else if (strcmp(k, "g") == 0) {
-        res = gaussian_filter(img, s, 0.0f); 
-    }
-    else if (strcmp(k, "r") == 0){
-        res = sharpen_filter(img, s);
-    }
-    else{
+    
+    char color[5] = "rgb";
+    if (strcmp(k, "dt") == 0) {
         printf("Enter: rgb / bw (Цветное/Черно-белое)\n");
-        char color[5];
         scanf("%s", color);
-        if (strcmp(color, "rgb") == 0){
-           res = edge_detection_overlay(img, s, 255, 0, 255); 
-        }
-        else if (strcmp(color, "bw") == 0){
-            res = edge_detection(img, s);
+    }
+    
+    if (is_file) {
+        Image* img = image_load(argv[2]);
+        if (!img) return 1;
+        
+        Image* res = NULL;
+        if (strcmp(k, "m") == 0) res = median_filter(img, s);
+        else if (strcmp(k, "g") == 0) res = gaussian_filter(img, s, 0.0f);
+        else if (strcmp(k, "r") == 0) res = sharpen_filter(img, s / 10.0f);
+        else if (strcmp(color, "rgb") == 0) res = edge_detection_overlay(img, s, 255, 0, 255);
+        else res = edge_detection(img, s);
+        
+        if (!res) { image_free(img); return 1; }
+        image_save(res, argv[3]);
+        image_free(img);
+        image_free(res);
+    }
+    else if (is_folder) {
+        create_output_dir(argv[3]);
+        char files[100][256];
+        int cnt = 0;
+        get_image_files(argv[2], files, &cnt);
+        
+        for (int i = 0; i < cnt; i++) {
+            Image* img = image_load(files[i]);
+            if (!img) continue;
+            
+            Image* res = NULL;
+            if (strcmp(k, "m") == 0) res = median_filter(img, s);
+            else if (strcmp(k, "g") == 0) res = gaussian_filter(img, s, 0.0f);
+            else if (strcmp(k, "r") == 0) res = sharpen_filter(img, s / 10.0f);
+            else if (strcmp(color, "rgb") == 0) res = edge_detection_overlay(img, s, 255, 0, 255);
+            else res = edge_detection(img, s);
+            
+            if (res) {
+                char out[512];
+                make_output_name(files[i], argv[3], k, out);
+                image_save(res, out);
+                image_free(res);
+            }
+            image_free(img);
         }
     }
-
-    if (!res) { image_free(img); return 1; };
-    
-    image_save(res, argv[2]);
-    
-    image_free(img);
-    image_free(res);
-    
     printf("Готово!\n");
     return 0;
 }
