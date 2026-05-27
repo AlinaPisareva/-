@@ -355,32 +355,56 @@ void create_output_dir(const char* output_dir) {
 }
 
 int main(int argc, char** argv) {
-    if (argc != 4) {
-        printf("Enter: %s file input.<png/jpg/bmp> output.<png/jpg/bmp> or %s folder input_dir output_dir\n", argv[0], argv[0]);
+    printf("-----ОБРАБОТКА ИЗОБРАЖЕНИЙ-----\n");
+    printf("Выберите формат:\n");
+    printf("file - Обработка одного изображения\n");
+    printf("folder - Обработка папки с изображениями\n");
+    printf("Ввод: ");
+    char tipe[10];
+    scanf("%s", tipe);
+
+    char input_path[512];
+    char output_path[512];
+
+    if (strcmp(tipe, "file") == 0) {
+        printf("\nВведите имя входного файла: ");
+        scanf("%s", input_path);
+        printf("Введите имя выходного файла: ");
+        scanf("%s", output_path);
+    } 
+    else if (strcmp(tipe, "folder") == 0) {
+        printf("\nВведите имя папки с изображениями: ");
+        scanf("%s", input_path);
+        printf("Введите имя папки для результатов: ");
+        scanf("%s", output_path);
+    } 
+    else {
+        printf("Ошибка: неправильный формат\n");
         return 1;
     }
-    
-    int is_file = (strcmp(argv[1], "file") == 0);
-    int is_folder = (strcmp(argv[1], "folder") == 0);
-    
-    if (!is_file && !is_folder) {
-        printf("Первый аргумент: file или folder\n");
-        return 1;
-    }
-    
-    printf("Enter: g / m / dt / r <size> (Гауссов/Медианный/Детекция/Резкость)\n");
+
+    printf("\nВыберите фильтр:\n");
+    printf("m  <size>  - Медианный фильтр <размер ядра - нечёт>\n");
+    printf("g  <size>  - Гауссов фильтр <размер ядра - нечёт>\n");
+    printf("dt <size>  - Детекция границ <порог - 0-255>\n");
+    printf("r  <size>  - Повышение резкости <сила - 0.3-2.0>\n");
+    printf("Ввод: ");
     char k[10];
     int s = 0;
     scanf("%s%d", k, &s);
     
-    char color[5] = "rgb";
+    char color[5];
     if (strcmp(k, "dt") == 0) {
-        printf("Enter: rgb / bw (Цветное/Черно-белое)\n");
+        printf("Выберите тип:\n");
+        printf("rgb - Цветные границы\n");
+        printf("bw  - Чёрно-белые границы\n");
+        printf("Ввод: ");
         scanf("%s", color);
     }
     
-    if (is_file) {
-        Image* img = image_load(argv[2]);
+    if (strcmp(tipe, "file") == 0) {
+        printf("\nОбработка...\n\n");
+        Image* img = image_load(input_path);
         if (!img) return 1;
         
         Image* res = NULL;
@@ -391,17 +415,20 @@ int main(int argc, char** argv) {
         else res = edge_detection(img, s);
         
         if (!res) { image_free(img); return 1; }
-        image_save(res, argv[3]);
+        image_save(res, output_path);
         image_free(img);
         image_free(res);
     }
-    else if (is_folder) {
-        create_output_dir(argv[3]);
+    else if (strcmp(tipe, "folder") == 0) {
+        create_output_dir(output_path);
         char files[100][256];
         int cnt = 0;
-        get_image_files(argv[2], files, &cnt);
+        get_image_files(input_path, files, &cnt);
+        printf("\nИзображений в папке: %d\n", cnt);
+        printf("Обработка...\n\n");
         
         for (int i = 0; i < cnt; i++) {
+            printf("[%d/%d] %s\n", i+1, cnt, files[i]);
             Image* img = image_load(files[i]);
             if (!img) continue;
             
@@ -414,13 +441,13 @@ int main(int argc, char** argv) {
             
             if (res) {
                 char out[512];
-                make_output_name(files[i], argv[3], k, out);
+                make_output_name(files[i], output_path, k, out);
                 image_save(res, out);
                 image_free(res);
             }
             image_free(img);
         }
     }
-    printf("Готово!\n");
+    printf("\nГотово!\n");
     return 0;
 }
