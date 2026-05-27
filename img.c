@@ -305,6 +305,11 @@ Image* gaussian_filter(Image* src, int kernel_size, float sigma) {
     return dst;
 }
 
+// Повышение резкости
+Image* sharpen_filter(Image* src, float strength) {
+    float kernel[9] = {0, -strength, 0, -strength, 1 + 4*strength, -strength, 0, -strength, 0};
+    return convolution(src, kernel, 3);
+}
 
 int main(int argc, char** argv) {
     if (argc != 3) {
@@ -315,7 +320,7 @@ int main(int argc, char** argv) {
     Image* img = image_load(argv[1]);
     if (!img) return 1;
 
-    printf("Enter: g / m / dt <size> (Гауссов фильтр/Медианный фильтр/Детекция границ)\n");
+    printf("Enter: g / m / dt / r <size> (Гауссов фильтр/Медианный фильтр/Детекция границ/Повышение резкости)\n");
     
     char k[10];
     int s = 0;
@@ -327,6 +332,9 @@ int main(int argc, char** argv) {
     }
     else if (strcmp(k, "g") == 0) {
         res = gaussian_filter(img, s, 0.0f); 
+    }
+    else if (strcmp(k, "r") == 0){
+        res = sharpen_filter(img, s);
     }
     else{
         printf("Enter: rgb / bw (Цветное/Черно-белое)\n");
