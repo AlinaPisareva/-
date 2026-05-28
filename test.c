@@ -381,13 +381,19 @@ void create_output_dir(const char* output_dir) {
 }
 
 int main() {
-    // Размеры изображений для тестирования
-    int sizes[][2] = {{320, 240}, {640, 480}, {1280, 720}, {1920, 1080}, {2560, 1440}, {3840, 2160}};
+    int sizes[][2] = {
+        {320, 240},    // 0.07 MP
+        {640, 480},    // 0.3 MP
+        {1280, 720},   // 0.9 MP
+        {1920, 1080},  // 2 MP
+        {2560, 1440},  // 3.7 MP
+        {3840, 2160}   // 8 MP
+    };
     int num_sizes = 6;
-    
-    printf("+------------+--------------+-----------------+-----------------+-----------------+\n");
-    printf("| Размер     | Пикселей     | Медианный(3x3)  | Гауссов(3x3)    | Детекция границ |\n");
-    printf("+------------+--------------+-----------------+-----------------+-----------------+\n");
+
+    printf("+------------+--------------+-----------------+-----------------+-----------------+-----------------+\n");
+    printf("| Размер     | Пикселей     | Медианный(3x3)  | Гауссов(3x3)    | Детекция(50)    | Резкость(2.0)  |\n");
+    printf("+------------+--------------+-----------------+-----------------+-----------------+-----------------+\n");
     
     for (int s = 0; s < num_sizes; s++) {
         int width = sizes[s][0];
@@ -396,18 +402,16 @@ int main() {
         char size_name[20];
         sprintf(size_name, "%dx%d", width, height);
         
-        printf("| %-10s | ", size_name);
-        printf("%-12d | ", pixels);
-        
         // Создаём тестовое изображение
         char filename[256];
         sprintf(filename, "test_%dx%d.png", width, height);
         create_test_image(filename, width, height);
         
         Image* img = image_load(filename);
+        double start;
         
         // Медианный фильтр (3x3)
-        double start = get_time_ms();
+        start = get_time_ms();
         Image* res1 = median_filter(img, 3);
         double t_median = get_time_ms() - start;
         if (res1) image_free(res1);
@@ -424,10 +428,18 @@ int main() {
         double t_edges = get_time_ms() - start;
         if (res3) image_free(res3);
         
-        printf("%15.2f | %15.2f | %15.2f |\n", t_median, t_gaussian, t_edges);
+        // Повышение резкости (сила 2.0)
+        start = get_time_ms();
+        Image* res4 = sharpen_filter(img, 2.0f);
+        double t_sharpen = get_time_ms() - start;
+        if (res4) image_free(res4);
+        
+        printf("| %-10s | %-12d | %15.2f | %15.2f | %15.2f | %15.2f |\n", 
+               size_name, pixels, t_median, t_gaussian, t_edges, t_sharpen);
+        
         image_free(img);
         remove(filename);
     }
-    printf("+------------+--------------+-----------------+-----------------+-----------------+\n");
+    printf("+------------+--------------+-----------------+-----------------+-----------------+-----------------+\n");  
     return 0;
 }
